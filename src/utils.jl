@@ -42,3 +42,11 @@ function get_cisf_costs(path)
 
     return costs
 end
+
+function get_conditional_NC_s(model, node, year, f::Function)
+    if f(year)
+        return model[:NC_s][node, year - 1]
+        else
+            return 0.0
+        end
+end
