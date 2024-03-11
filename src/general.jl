@@ -3,7 +3,9 @@
 using JuMP
 using GLPK
 
-path = "C:/Users/ACER/Documents/Downloads/NuclearData.xlsx"
+include("utils.jl")
+
+path = "src/NuclearData.xlsx"
 
 years = 2030:2100
 
@@ -51,11 +53,23 @@ set_optimizer(model, GLPK.Optimizer)
 #TODO add cost parameters to obj function!!!
 #TODO are costs for SNF and NC the same? what measurments do we use?
 #TODO two transport modes? really nessecary?
-@objective(model, Min, sum(sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + sum(SNF_s[n, y] + NC_s[n, y] for n in nodes) + sum(B[i, y] for i in interim_storages) + sum(SNF_t[n, hc, y] for hc in hot_cells, n in nodes) for y in years) + sum(NC_t_end[i] for i in interim_storages))
+@objective(model, Min, 
+            sum(sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
+            sum(SNF_s[n, y] + NC_s[n, y] for n in nodes) + sum(B[i, y] for i in interim_storages) + 
+            sum(SNF_t[n, hc, y] for hc in hot_cells, n in nodes) for y in years) + 
+            sum(NC_t_end[i] for i in interim_storages)
+)
 
 # mass balances
-@constraint(model, mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], sum(SNF_t[m, n, y] for m in nodes) - sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y])
-@constraint(model, mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], sum(NC_t[m, n, y] for m in nodes) - sum(NC_t[n, m, y] for m in nodes) + get_conditional_NC_s(model, n, y, y_ -> y_ > minimum(years)) ==  NC_s[n, y])
+@constraint(model, 
+            mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], 
+            sum(SNF_t[m, n, y] for m in nodes) - # incoming
+            sum(SNF_t[n, m, y] for m in nodes) + # outgoing
+            SNF_s[n, y - 1] == SNF_s[n, y])
+@constraint(model, 
+            mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], 
+            sum(NC_t[m, n, y] for m in nodes) - sum(NC_t[n, m, y] for m in nodes) + 
+            get_conditional_NC_s(model, n, y, y_ -> y_ > minimum(years)) ==  NC_s[n, y])
 # TODO can we move casks from a cisf (before moving to end storage)?
 # TODO can we store SNF in a cisf?
 
