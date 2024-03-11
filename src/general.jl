@@ -3,6 +3,8 @@
 using JuMP
 using GLPK
 
+using HiGHS
+
 path = "C:/Users/ACER/Documents/Downloads/NuclearData.xlsx"
 
 years = 2030:2100
@@ -27,18 +29,26 @@ for n in nodes
         end
 end
 
+esf_costs = get_end_storage_transport_costs(path)
+
 cisf_costs = get_cisf_costs(path)
 interim_storages = keys(cisf_costs)
+
+general = get_general_data(path)
+
+CISF_BUILDING_COSTS = general["CISF_building_costs"]
+CISF_OPERATING_COSTS = general["CISF_operation_costs"]
+REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
 
 BIG_trans = 10000000
 
 CASK_DECAY = 0.05
 BIG_cap = 1000000
-BIG_cisf = BIG_cap ^2
+BIG_cisf = 1000000
 
 #create model and attach solver
 model = Model()
-set_optimizer(model, GLPK.Optimizer)
+set_optimizer(model, HiGHS.Optimizer)
 
 #create all variables we need
 @variable(model, SNF_t[nodes, nodes, years] >= 0)
@@ -51,11 +61,16 @@ set_optimizer(model, GLPK.Optimizer)
 #TODO add cost parameters to obj function!!!
 #TODO are costs for SNF and NC the same? what measurments do we use?
 #TODO two transport modes? really nessecary?
-@objective(model, Min, sum(sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + sum(SNF_s[n, y] + NC_s[n, y] for n in nodes) + sum(B[i, y] for i in interim_storages) + sum(SNF_t[n, hc, y] for hc in hot_cells, n in nodes) for y in years) + sum(NC_t_end[i] for i in interim_storages))
+@objective(model, Min, sum(
+    sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
+        REACTOR_OPERATING_COSTS * sum(SNF_s[r, y] + NC_s[r, y] for r in reactors) + 
+        CISF_OPERATING_COSTS * sum(SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
+        CISF_BUILDING_COSTS * sum(B[i, y] for i in interim_storages, y in years) + 
+        sum(NC_t_end[n] * esf_costs[n] for n in nodes))
 
 # mass balances
 @constraint(model, mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], sum(SNF_t[m, n, y] for m in nodes) - sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y])
-@constraint(model, mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], sum(NC_t[m, n, y] for m in nodes) - sum(NC_t[n, m, y] for m in nodes) + get_conditional_NC_s(model, n, y, y_ -> y_ > minimum(years)) ==  NC_s[n, y])
+@constraint(model, mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], sum(NC_t[m, n, y] for m in nodes) - sum(NC_t[n, m, y] for m in nodes) + get_conditional_variable(model, n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y])
 # TODO can we move casks from a cisf (before moving to end storage)?
 # TODO can we store SNF in a cisf?
 
@@ -84,13 +99,19 @@ set_optimizer(model, GLPK.Optimizer)
 @constraint(model, cisf_build[i = interim_storages], sum(B[i, y] for y in years) <= 1)
 
 # dont store before you build
-@constraint(model, cisf_build_before_store[i = interim_storages, y = years], sum(SNF_s[i, cur] + NC_s[i, cur] + sum(SNF_t[n, i, cur] + SNF_t[i, n, cur] + NC_t[i, n, cur] + NC_t[n, i, cur] for n in nodes) for cur in minimum(years): y) <= sum(B[i, cur] for cur in minimum(years): y) * BIG_cisf)
+# TODO double check!
+@constraint(model, cisf_build_before_store[i = interim_storages, y = years], SNF_s[i, y] + NC_s[i, y] + sum(NC_t[n, i, y] + SNF_t[n, i, y] for n in nodes) <= sum(B[i, cur] for cur in minimum(years): y) * BIG_cisf)
+
+# constraints to prevent model from using cisfs as transport node
+@constraint(model, dont_move_nc_from_cisf[i = interim_storages, y = years], sum(NC_t[i, n, y] for n in nodes) == 0)
+@constraint(model, dont_move_snf_to_cisf[i = interim_storages, y = years], sum(SNF_t[n, i, y] for n in nodes) == 0)
 
 # cask decay
-@constraint(model, cask_decay[y = (minimum(years)+1):maximum(years), n = nodes; n ∉ hot_cells], sum(SNF_t[n, hc, y] for hc in hot_cells) >= sum(CASK_DECAY * SNF_s[n, y - 1]))
+@constraint(model, cask_decay[y = (minimum(years)+1):maximum(years), n = nodes; n ∉ hot_cells], sum(SNF_t[n, hc, y] for hc in hot_cells) >= CASK_DECAY * SNF_s[n, y - 1])
 
 # initialize snf at reactors
 @constraint(model, initial_snf[n = nodes], SNF_s[n, minimum(years) - 1] == snf[n])
+
 
 optimize!(model)
 obj_value = objective_value(model)
@@ -120,3 +141,21 @@ end
 
 CSV.write("snf_shipped.csv", df_SNF_t)
 CSV.write("nc_shipped.csv", df_NC_t)
+
+df_Bi = DataFrame(cisf = String[], year = Int[], build = Int[])
+for i in interim_storages, y in years
+    append!(df_Bi, DataFrame(cisf = i, year = y, build = round(value.(B[i,y]))))
+end
+
+CSV.write("cisf_build.csv", df_Bi)
+
+df_to_end = DataFrame(node = String[], NC = Int[])
+for i in nodes
+    append!(df_to_end, DataFrame(node = i,NC = round(value.(NC_t_end[i]))))
+end
+
+CSV.write("end_transport.csv", df_to_end)
+
+println(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
+
+value(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
