@@ -1,6 +1,6 @@
 library(tidyverse)
 
-julia_dir <- "C:/Users/ACER/Desktop/Uni/OR-INF/operations_oppenheimer/"
+julia_dir <- "operations_oppenheimer/"
 
 snf_s <- read.csv(file = paste0(julia_dir,"snf_stored.csv"))
 

@@ -2,10 +2,14 @@
 
 using JuMP
 using GLPK
+using DataFrames
+using CSV
 
 using HiGHS
 
-path = "C:/Users/ACER/Documents/Downloads/NuclearData.xlsx"
+include("utils.jl")
+
+path = "operations_oppenheimer/NuclearData.xlsx"
 
 years = 2030:2100
 
@@ -69,56 +73,119 @@ set_optimizer(model, HiGHS.Optimizer)
         sum(NC_t_end[n] * esf_costs[n] for n in nodes))
 
 # mass balances
-@constraint(model, mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], sum(SNF_t[m, n, y] for m in nodes) - sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y])
-@constraint(model, mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], sum(NC_t[m, n, y] for m in nodes) - sum(NC_t[n, m, y] for m in nodes) + get_conditional_variable(model, n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y])
+@constraint(
+    model, 
+    mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], 
+    sum(SNF_t[m, n, y] for m in nodes) - sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y]
+)
+
+@constraint(
+    model, 
+    mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], 
+    sum(NC_t[m, n, y] for m in nodes) - 
+    sum(NC_t[n, m, y] for m in nodes) + 
+    get_conditional_variable(model, n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y]
+)
 # TODO can we move casks from a cisf (before moving to end storage)?
 # TODO can we store SNF in a cisf?
 
 # hot cell shit here
-@constraint(model, mass_balance_hc[hc = hot_cells, y = years], sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes))
+@constraint(
+    model, 
+    mass_balance_hc[hc = hot_cells, y = years], 
+    sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
+)
 
-@constraint(model, hc_production_cap[hc = hot_cells, y = years], sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc])
+@constraint(
+    model, 
+    hc_production_cap[hc = hot_cells, y = years], 
+    sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
+)
 
-@constraint(model, no_casks_to_hc[hc = hot_cells, y = years], sum(NC_t[n, hc, y] for n in nodes) == 0)
+@constraint(
+    model, 
+    no_casks_to_hc[hc = hot_cells, y = years], 
+    sum(NC_t[n, hc, y] for n in nodes) == 0)
 
-@constraint(model, no_snf_from_hc[hc = hot_cells, y = years], sum(SNF_t[hc, n, y] for n in nodes) == 0)
+@constraint(
+    model, 
+    no_snf_from_hc[hc = hot_cells, y = years], 
+    sum(SNF_t[hc, n, y] for n in nodes) == 0
+)
 
 # storage capacities
-@constraint(model, storage[n = nodes, y = years], SNF_s[n, y] + NC_s[n, y] <= storage_cap[n]) # are capacities fix?
+@constraint(
+    model, 
+    storage[n = nodes, y = years], 
+    SNF_s[n, y] + NC_s[n, y] <= storage_cap[n]
+) # are capacities fix?
 
 # transport is possible
-@constraint(model, transport_possibility[n = nodes, m = nodes, y = years], SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * BIG_trans)
+@constraint(
+    model, 
+    transport_possibility[n = nodes, m = nodes, y = years], 
+    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * BIG_trans
+)
 
 # transport to end storage facility
 @constraint(model, transport_to_end[n = nodes], NC_t_end[n] == NC_s[n, maximum(years)])
 
 # SNF clearing condition
-@constraint(model, SNF_clear[n = nodes], SNF_s[n, maximum(years)] == 0)
+@constraint(
+    model, 
+    SNF_clear[n = nodes], 
+    SNF_s[n, maximum(years)] == 0
+)
 
 # contraint for building cisf only once
-@constraint(model, cisf_build[i = interim_storages], sum(B[i, y] for y in years) <= 1)
+@constraint(
+    model, 
+    cisf_build[i = interim_storages], 
+    sum(B[i, y] for y in years) <= 1
+)
 
 # dont store before you build
 # TODO double check!
-@constraint(model, cisf_build_before_store[i = interim_storages, y = years], SNF_s[i, y] + NC_s[i, y] + sum(NC_t[n, i, y] + SNF_t[n, i, y] for n in nodes) <= sum(B[i, cur] for cur in minimum(years): y) * BIG_cisf)
+@constraint(
+    model, 
+    cisf_build_before_store[i = interim_storages, y = years], 
+    SNF_s[i, y] + NC_s[i, y] + 
+    sum(NC_t[n, i, y] + 
+    SNF_t[n, i, y] for n in nodes) <= sum(B[i, cur] for cur in minimum(years): y) * BIG_cisf
+)
 
 # constraints to prevent model from using cisfs as transport node
-@constraint(model, dont_move_nc_from_cisf[i = interim_storages, y = years], sum(NC_t[i, n, y] for n in nodes) == 0)
-@constraint(model, dont_move_snf_to_cisf[i = interim_storages, y = years], sum(SNF_t[n, i, y] for n in nodes) == 0)
+@constraint(
+    model, 
+    dont_move_nc_from_cisf[i = interim_storages, y = years], 
+    sum(NC_t[i, n, y] for n in nodes) == 0
+)
+
+@constraint(
+    model, 
+    dont_move_snf_to_cisf[i = interim_storages, y = years], 
+    sum(SNF_t[n, i, y] for n in nodes) == 0
+)
 
 # cask decay
-@constraint(model, cask_decay[y = (minimum(years)+1):maximum(years), n = nodes; n ∉ hot_cells], sum(SNF_t[n, hc, y] for hc in hot_cells) >= CASK_DECAY * SNF_s[n, y - 1])
+@constraint(
+    model, 
+    cask_decay[y = (minimum(years)+1):maximum(years), 
+    n = nodes; n ∉ hot_cells], 
+    sum(SNF_t[n, hc, y] for hc in hot_cells) >= CASK_DECAY * SNF_s[n, y - 1]
+)
 
 # initialize snf at reactors
-@constraint(model, initial_snf[n = nodes], SNF_s[n, minimum(years) - 1] == snf[n])
+@constraint(
+    model, 
+    initial_snf[n = nodes], 
+    SNF_s[n, minimum(years) - 1] == snf[n]
+)
 
 
 optimize!(model)
 obj_value = objective_value(model)
 println("Total costs are ", obj_value)
-
-using DataFrames
-using CSV
 
 df_SNF_s = DataFrame(node = String[], year = Int[], SNF = Float32[])
 df_NC_s = DataFrame(node = String[], year = Int[], NC = Float32[])
