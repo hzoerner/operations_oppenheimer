@@ -60,7 +60,7 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_t[nodes, nodes, years] >= 0)
 @variable(model, NC_s[nodes, years] >= 0)
 @variable(model, NC_t_end[nodes] >= 0)
-@variable(model, B[interim_storages, years], Bin)
+@variable(model, B[interim_storages], Bin)
 
 #TODO add cost parameters to obj function!!!
 #TODO are costs for SNF and NC the same? what measurments do we use?
@@ -69,14 +69,15 @@ set_optimizer(model, HiGHS.Optimizer)
     sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
         REACTOR_OPERATING_COSTS * sum(SNF_s[r, y] + NC_s[r, y] for r in reactors) + 
         CISF_OPERATING_COSTS * sum(SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
-        CISF_BUILDING_COSTS * sum(B[i, y] for i in interim_storages, y in years) + 
+        CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages, y in years) + 
         sum(NC_t_end[n] * esf_costs[n] for n in nodes))
 
 # mass balances
 @constraint(
     model, 
     mass_balance_SNF[n = nodes, y = years; n ∉ hot_cells], 
-    sum(SNF_t[m, n, y] for m in nodes) - sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y]
+    sum(SNF_t[m, n, y] for m in nodes) - 
+    sum(SNF_t[n, m, y] for m in nodes) + SNF_s[n, y - 1] == SNF_s[n, y]
 )
 
 @constraint(
@@ -89,24 +90,27 @@ set_optimizer(model, HiGHS.Optimizer)
 # TODO can we move casks from a cisf (before moving to end storage)?
 # TODO can we store SNF in a cisf?
 
-# hot cell shit here
+# hot cell shit here (Kosten für Umladen notwendig?)
 @constraint(
     model, 
     mass_balance_hc[hc = hot_cells, y = years], 
     sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
 )
 
+# hot cell processing capacities
 @constraint(
     model, 
     hc_production_cap[hc = hot_cells, y = years], 
     sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
 )
 
+# No new casks to hot cell
 @constraint(
     model, 
     no_casks_to_hc[hc = hot_cells, y = years], 
     sum(NC_t[n, hc, y] for n in nodes) == 0)
 
+# no "old" cask from hot cell
 @constraint(
     model, 
     no_snf_from_hc[hc = hot_cells, y = years], 
@@ -130,6 +134,7 @@ set_optimizer(model, HiGHS.Optimizer)
 # transport to end storage facility
 @constraint(model, transport_to_end[n = nodes], NC_t_end[n] == NC_s[n, maximum(years)])
 
+
 # SNF clearing condition
 @constraint(
     model, 
@@ -137,12 +142,12 @@ set_optimizer(model, HiGHS.Optimizer)
     SNF_s[n, maximum(years)] == 0
 )
 
-# contraint for building cisf only once
-@constraint(
-    model, 
-    cisf_build[i = interim_storages], 
-    sum(B[i, y] for y in years) <= 1
-)
+# contraint for building cisf only once (notwendig?)
+# @constraint(
+#     model, 
+#     cisf_build[i = interim_storages], 
+#     sum(B[i, y] for y in years) <= 1
+# )
 
 # dont store before you build
 # TODO double check!
@@ -151,7 +156,7 @@ set_optimizer(model, HiGHS.Optimizer)
     cisf_build_before_store[i = interim_storages, y = years], 
     SNF_s[i, y] + NC_s[i, y] + 
     sum(NC_t[n, i, y] + 
-    SNF_t[n, i, y] for n in nodes) <= sum(B[i, cur] for cur in minimum(years): y) * BIG_cisf
+    SNF_t[n, i, y] for n in nodes) <= B[i] * BIG_cisf
 )
 
 # constraints to prevent model from using cisfs as transport node
@@ -211,7 +216,7 @@ CSV.write("nc_shipped.csv", df_NC_t)
 
 df_Bi = DataFrame(cisf = String[], year = Int[], build = Int[])
 for i in interim_storages, y in years
-    append!(df_Bi, DataFrame(cisf = i, year = y, build = round(value.(B[i,y]))))
+    append!(df_Bi, DataFrame(cisf = i, year = y, build = round(value.(B[i]))))
 end
 
 CSV.write("cisf_build.csv", df_Bi)
@@ -226,3 +231,4 @@ CSV.write("end_transport.csv", df_to_end)
 println(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
 
 value(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
+
