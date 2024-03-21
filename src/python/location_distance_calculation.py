@@ -1,7 +1,7 @@
 import geopy.distance as distance
 import pandas as pd
 
-excel_path = 'NuclearData.xlsx'
+excel_path = 'ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
 
 # geo coordinates for each interim storage facility
@@ -25,9 +25,9 @@ hot_cell_coords = {"Hot Cell 1": isf_coords["Gorleben"],
                    "Hot Cell 2": isf_coords["Ahaus"]}
 
 #TODO: define reasonale CISF locations
-cisf_coords = {}
+cisf_coords = {"Bitterfeld-Wolfen": (51.629768322548436, 12.347979074398868)}
 
-combined_coords = isf_coords | hot_cell_coords # NOTE: cisf_coords not included
+combined_coords = isf_coords | hot_cell_coords | cisf_coords 
 
 # calculate distances 
 rows_list = []
