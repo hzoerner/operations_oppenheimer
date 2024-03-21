@@ -9,9 +9,9 @@ using HiGHS
 
 include("utils.jl")
 
-path = "operations_oppenheimer/NuclearData.xlsx"
+path = "../operations_oppenheimer/NuclearData.xlsx"
 
-years = 2030:2100
+years = 2030:2099
 
 transport_details = get_transport_details(path)
 
@@ -26,12 +26,6 @@ hot_cells = keys(production_capacities)
 
 storage_cap = get_storage_capacities(path)
 nodes = keys(storage_cap)
-
-for n in nodes
-    if !haskey(snf, n)
-        snf[n] = 0
-        end
-end
 
 esf_costs = get_end_storage_transport_costs(path)
 
@@ -65,12 +59,14 @@ set_optimizer(model, HiGHS.Optimizer)
 #TODO add cost parameters to obj function!!!
 #TODO are costs for SNF and NC the same? what measurments do we use?
 #TODO two transport modes? really nessecary?
-@objective(model, Min, sum(
-    sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
+@objective(model, Min, 
+    sum(
+        sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
         REACTOR_OPERATING_COSTS * sum(SNF_s[r, y] + NC_s[r, y] for r in reactors) + 
-        CISF_OPERATING_COSTS * sum(SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
-        CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages, y in years) + 
-        sum(NC_t_end[n] * esf_costs[n] for n in nodes))
+        CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
+    CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) + 
+    sum(NC_t_end[n] * esf_costs[n] for n in nodes)
+)
 
 # mass balances
 @constraint(
@@ -142,13 +138,6 @@ set_optimizer(model, HiGHS.Optimizer)
     SNF_s[n, maximum(years)] == 0
 )
 
-# contraint for building cisf only once (notwendig?)
-# @constraint(
-#     model, 
-#     cisf_build[i = interim_storages], 
-#     sum(B[i, y] for y in years) <= 1
-# )
-
 # dont store before you build
 # TODO double check!
 @constraint(
@@ -184,7 +173,7 @@ set_optimizer(model, HiGHS.Optimizer)
 @constraint(
     model, 
     initial_snf[n = nodes], 
-    SNF_s[n, minimum(years) - 1] == snf[n]
+    SNF_s[n, minimum(years) - 1] == get_snf_at_node(snf, n)
 )
 
 
@@ -214,9 +203,9 @@ end
 CSV.write("snf_shipped.csv", df_SNF_t)
 CSV.write("nc_shipped.csv", df_NC_t)
 
-df_Bi = DataFrame(cisf = String[], year = Int[], build = Int[])
-for i in interim_storages, y in years
-    append!(df_Bi, DataFrame(cisf = i, year = y, build = round(value.(B[i]))))
+df_Bi = DataFrame(cisf = String[], build = Int[])
+for i in interim_storages
+    append!(df_Bi, DataFrame(cisf = i, build = round(value.(B[i]))))
 end
 
 CSV.write("cisf_build.csv", df_Bi)
@@ -228,7 +217,4 @@ end
 
 CSV.write("end_transport.csv", df_to_end)
 
-println(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
-
-value(cisf_build_before_store["Bitterfeld-Wolfen", 2095])
-
+println("Done!")

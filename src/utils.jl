@@ -64,3 +64,11 @@ function get_end_storage_transport_costs(path)
     
     return costs
 end
+
+function get_snf_at_node(snf, node)
+    if haskey(snf, node)
+        return snf[node]
+        end
+
+    return 0.0
+end
