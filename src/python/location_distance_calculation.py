@@ -4,8 +4,8 @@ import pandas as pd
 excel_path = 'NuclearData.xlsx'
 distance_sheet = "Transport"
 # read orginal excel file with costs/distances in Transport sheet
-xlsx = pd.ExcelFile(excel_path)
-distance_df = pd.read_excel(xlsx, distance_sheet)
+# xlsx = pd.ExcelFile(excel_path)
+# distance_df = pd.read_excel(xlsx, distance_sheet)
 
 # geo coordinates for each interim storage facility
 isf_coords = {"Gorleben": (53.033344625111255, 11.341597461918763),
@@ -32,16 +32,15 @@ cisf_coords = {}
 
 
 combined_coords = isf_coords | hot_cell_coords # NOTE: cisf_coords not included
-
+distance_df = pd.DataFrame(columns=["from", "to", "is_possible", "costs"])
+rows_list = []
 for f, f_c in combined_coords.items():
     for t, t_c in combined_coords.items():
-        if f_c != t_c:
-            distance_df.loc[(distance_df["from"] == f) & (distance_df["to"] == t), "is_possible"] = 1
-            distance_df.loc[(distance_df["from"] == f) & (distance_df["to"] == t), "costs"] = distance.distance(f_c, t_c).kilometers
-        else:
-            distance_df.loc[(distance_df["from"] == f) & (distance_df["to"] == t), "is_possible"] = 0
-            distance_df.loc[(distance_df["from"] == f) & (distance_df["to"] == t), "costs"] = 0
-
-# save updated data to original excel file            
-distance_df.to_excel(excel_path, sheet_name=distance_sheet, float_format="%.2f", index=False)
+        rows_list.append({"from": f, "to": t, "is_possible": 1 if f_c != t_c else 0, "costs": distance.distance(f_c, t_c).kilometers})
+distance_df = pd.DataFrame(rows_list)
 distance_df.head()
+# save updated data to original excel file     
+with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace", ) as writer:
+    distance_df.to_excel(writer, sheet_name=distance_sheet, float_format="%.2f", index=False)
+#distance_df.head()
+print("Done.")
