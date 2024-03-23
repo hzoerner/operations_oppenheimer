@@ -9,7 +9,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "../operations_oppenheimer/NuclearData.xlsx"
+path = "../operations_oppenheimer/ExtendedNuclearData.xlsx"
 
 years = 2030:2099
 
