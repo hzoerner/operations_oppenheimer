@@ -27,7 +27,9 @@ hot_cell_coords = {"Hot Cell 1": isf_coords["Gorleben"],
 #TODO: define reasonale CISF locations
 cisf_coords = {"Bitterfeld-Wolfen": (51.629768322548436, 12.347979074398868)}
 
-combined_coords = isf_coords | hot_cell_coords | cisf_coords 
+fsf_coords = {"Endlager": (...,...)}
+
+combined_coords = isf_coords | hot_cell_coords | cisf_coords
 
 # calculate distances 
 rows_list = []
