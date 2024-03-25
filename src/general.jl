@@ -9,7 +9,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "../operations_oppenheimer/ExtendedNuclearData.xlsx"
+path = "operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2099
 
@@ -199,8 +199,8 @@ for n in nodes, y in years
     append!(df_NC_s, DataFrame(node = n, year = y, NC = round(value.(NC_s[n,y]))))
 end
 
-CSV.write("snf_stored.csv", df_SNF_s)
-CSV.write("nc_stored.csv", df_NC_s)
+CSV.write("operations_oppenheimer/data/snf_stored.csv", df_SNF_s)
+CSV.write("operations_oppenheimer/data/nc_stored.csv", df_NC_s)
 
 df_SNF_t = DataFrame(from = String[], to = String[], year = Int[], SNF = Float32[])
 df_NC_t = DataFrame(from = String[], to = String[], year = Int[], NC = Float32[])
@@ -210,21 +210,21 @@ for n in nodes, m in nodes, y in years
     append!(df_NC_t, DataFrame(from = n, to = m, year = y, NC = round(value.(NC_t[n,m,y]))))
 end
 
-CSV.write("snf_shipped.csv", df_SNF_t)
-CSV.write("nc_shipped.csv", df_NC_t)
+CSV.write("operations_oppenheimer/data/snf_shipped.csv", df_SNF_t)
+CSV.write("operations_oppenheimer/data/nc_shipped.csv", df_NC_t)
 
 df_Bi = DataFrame(cisf = String[], build = Int[])
 for i in interim_storages
     append!(df_Bi, DataFrame(cisf = i, build = round(value.(B[i]))))
 end
 
-CSV.write("cisf_build.csv", df_Bi)
+CSV.write("operations_oppenheimer/data/cisf_build.csv", df_Bi)
 
 df_to_end = DataFrame(node = String[], NC = Int[])
 for i in nodes
     append!(df_to_end, DataFrame(node = i,NC = round(value.(NC_t_end[i]))))
 end
 
-CSV.write("end_transport.csv", df_to_end)
+CSV.write("operations_oppenheimer/data/end_transport.csv", df_to_end)
 
 println("Done!")

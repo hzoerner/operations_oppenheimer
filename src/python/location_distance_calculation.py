@@ -1,7 +1,7 @@
 import geopy.distance as distance
 import pandas as pd
 
-excel_path = 'ExtendedNuclearData.xlsx'
+excel_path = 'operations_oppenheimer/ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
 
 # geo coordinates for each interim storage facility
@@ -25,7 +25,12 @@ hot_cell_coords = {"Hot Cell 1": isf_coords["Gorleben"],
                    "Hot Cell 2": isf_coords["Ahaus"]}
 
 #TODO: define reasonale CISF locations
-cisf_coords = {"Bitterfeld-Wolfen": (51.629768322548436, 12.347979074398868)}
+
+cisf_names = ['Oberdachstetten', 'Kaiseresch', 'Stade', 'Hann. Münden', 'Crivitz', 'Gardelegen', 'Arnstadt', 'Kuchen']
+cisf_coords = [(49.41887922, 10.42371430), (50.22679584,7.13714757), (53.59721036,9.45195604), 
+(51.41175438, 9.65999936), (53.57227292, 11.64393809), (52.51810692, 11.40461218), (50.83101325, 10.95047937), (48.64054772, 9.802936604)]
+cisf_coords = {k:v for k, v in zip(cisf_names, cisf_coords)}
+
 
 fsf_coords = {"Endlager": (...,...)}
 
