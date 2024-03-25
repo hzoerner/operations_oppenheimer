@@ -43,7 +43,14 @@ function get_cisf_costs(path)
     return costs
 end
 
-function get_conditional_variable(model, node, year, f::Function, VAR)
+function get_reactor_costs(path)
+    df = DataFrame(XLSX.readtable(path, "Reactors"))
+    costs = Dict(df.name[i] => df.costs[i] for i in 1:nrow(df))
+
+    return costs
+end
+
+function get_conditional_variable(node, year, f::Function, VAR)
     if f(year)
         return VAR[node, year - 1]
         else

@@ -18,9 +18,6 @@ transport_details = get_transport_details(path)
 transport_costs = transport_details[2]
 TRANSPORT_POSSIBLE = transport_details[1]
 
-snf = get_snf_at_reactors(path)
-reactors = keys(snf)
-
 production_capacities = get_hot_cell_capacities(path)
 hot_cells = keys(production_capacities)
 
@@ -38,11 +35,24 @@ CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
 
-BIG_trans = 10000000
+snf = get_snf_at_reactors(path)
+reactors = keys(snf)
+
+reactor_costs = Dict()
+
+for r in reactors
+    if r ∈ ("Gorleben", "Ahaus")
+        reactor_costs[r] = CISF_OPERATING_COSTS
+    else
+        reactor_costs[r] = REACTOR_OPERATING_COSTS
+    end
+end
 
 CASK_DECAY = 0.05
-BIG_cap = 1000000
-BIG_cisf = 1000000
+
+DISCOUNT = 1.02
+
+INITIAL_VOLUME = sum(values(snf))
 
 #create model and attach solver
 model = Model()
@@ -56,16 +66,14 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_t_end[nodes] >= 0)
 @variable(model, B[interim_storages], Bin)
 
-#TODO add cost parameters to obj function!!!
-#TODO are costs for SNF and NC the same? what measurments do we use?
-#TODO two transport modes? really nessecary?
+
 @objective(model, Min, 
     sum(
-        sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
-        REACTOR_OPERATING_COSTS * sum(SNF_s[r, y] + NC_s[r, y] for r in reactors) + 
-        CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
+        DISCOUNT ^ (y - minimum(years)) * sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
+        DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) + 
+        DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
     CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) + 
-    sum(NC_t_end[n] * esf_costs[n] for n in nodes)
+    DISCOUNT ^ (maximum(years) - minimum(years)) * sum(NC_t_end[n] * esf_costs[n] for n in nodes)
 )
 
 # mass balances
@@ -83,8 +91,12 @@ set_optimizer(model, HiGHS.Optimizer)
     sum(NC_t[n, m, y] for m in nodes) + 
     get_conditional_variable(model, n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y]
 )
-# TODO can we move casks from a cisf (before moving to end storage)?
-# TODO can we store SNF in a cisf?
+
+@constraint(
+    model,
+    no_waste_on_the_road[y = years],
+    INITIAL_VOLUME == sum(NC_s[n, y] + SNF_s[n, y] for n in nodes)
+)
 
 # hot cell shit here (Kosten für Umladen notwendig?)
 @constraint(
@@ -93,18 +105,18 @@ set_optimizer(model, HiGHS.Optimizer)
     sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
 )
 
-# hot cell processing capacities
-@constraint(
-    model, 
-    hc_production_cap[hc = hot_cells, y = years], 
-    sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
-)
+# # hot cell processing capacities
+# @constraint(
+#     model, 
+#     hc_production_cap[hc = hot_cells, y = years], 
+#     sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
+# )
 
-# No new casks to hot cell
-@constraint(
-    model, 
-    no_casks_to_hc[hc = hot_cells, y = years], 
-    sum(NC_t[n, hc, y] for n in nodes) == 0)
+# # No new casks to hot cell
+# @constraint(
+#     model, 
+#     no_casks_to_hc[hc = hot_cells, y = years], 
+#     sum(NC_t[n, hc, y] for n in nodes) == 0)
 
 # no "old" cask from hot cell
 @constraint(
@@ -124,7 +136,7 @@ set_optimizer(model, HiGHS.Optimizer)
 @constraint(
     model, 
     transport_possibility[n = nodes, m = nodes, y = years], 
-    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * BIG_trans
+    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 2000 #TODO set BIG as small as possible
 )
 
 # transport to end storage facility
@@ -139,13 +151,11 @@ set_optimizer(model, HiGHS.Optimizer)
 )
 
 # dont store before you build
-# TODO double check!
+# TODO double check! add extra accounting constraint
 @constraint(
     model, 
     cisf_build_before_store[i = interim_storages, y = years], 
-    SNF_s[i, y] + NC_s[i, y] + 
-    sum(NC_t[n, i, y] + 
-    SNF_t[n, i, y] for n in nodes) <= B[i] * BIG_cisf
+    SNF_s[i, y] + NC_s[i, y] <= B[i] * 500 #TODO set cisf capacity instead of BIG
 )
 
 # constraints to prevent model from using cisfs as transport node
