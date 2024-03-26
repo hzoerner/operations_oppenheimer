@@ -1,6 +1,6 @@
 library(tidyverse)
 
-julia_dir <- "operations_oppenheimer/"
+julia_dir <- "C:/Users/ACER/Desktop/Uni/OR-INF/operations_oppenheimer/"
 
 snf_s <- read.csv(file = paste0(julia_dir,"snf_stored.csv"))
 
@@ -15,21 +15,24 @@ snf_t_1 <- snf_t %>%
 
 nc_t <- read.csv(file = paste0(julia_dir,"nc_shipped.csv"))
 
+snf_s_1 <- snf_s %>%
+  filter(SNF > 0)
+
+nc_s_1 <- nc_s %>%
+  filter(NC > 0)
+
 nc_t_1 <- nc_t %>%
   filter(NC > 0)
 
-nc_s %>%
-  group_by(year, node) %>%
-  summarise(total = sum(NC))
-
 snf_over_time <- snf_s %>%
-  filter(node %in% c("Reaktor 1", "Reaktor 2"))
+  group_by(year) %>%
+  summarise(total = sum(SNF))
 
-ggplot(snf_s, aes(x = year, y = SNF, fill = node)) +
+ggplot(snf_s_1, aes(x = year, y = SNF, fill = node)) +
   
   geom_col()
 
-ggplot(nc_s, aes(x = year, y = NC, fill = node)) +
+ggplot(nc_s_1, aes(x = year, y = NC, fill = node)) +
   
   geom_col() +
   
