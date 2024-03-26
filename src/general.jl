@@ -141,14 +141,7 @@ set_optimizer(model, HiGHS.Optimizer)
 @constraint(
     model, 
     transport_possibility[n = nodes, m = nodes, y = years], 
-    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 20 #TODO set BIG as small as possible
-)
-
-# transport is possible
-@constraint(
-    model, 
-    transport_overall_limit[y = years], 
-    sum(SNF_t[n, m, y] + NC_t[n, m, y] for n in nodes, m in nodes) <= 120
+    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 100 #TODO set BIG as small as possible
 )
 
 # transport to end storage facility
@@ -168,8 +161,8 @@ set_optimizer(model, HiGHS.Optimizer)
 # dont store before you build
 @constraint(
     model, 
-    cisf_build_before_store[i = interim_storages], 
-    sum(SNF_s[i, y] + NC_s[i, y] for y in years) <= B[i] * 500 #TODO set cisf capacity instead of BIG
+    cisf_build_before_store[i = interim_storages, y = years], 
+    sum(SNF_s[i, y] + NC_s[i, y]) <= B[i] * 500 #TODO set cisf capacity instead of BIG
 )
 
 @constraint(
