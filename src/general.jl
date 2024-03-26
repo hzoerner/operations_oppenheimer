@@ -9,7 +9,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "../operations_oppenheimer/ExtendedNuclearData.xlsx"
+path = "C:/Users/ACER/Desktop/Uni/OR-INF/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2099
 
@@ -72,7 +72,7 @@ set_optimizer(model, HiGHS.Optimizer)
         DISCOUNT ^ (y - minimum(years)) * sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
         DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) + 
         DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
-    CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) + 
+    CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) +
     DISCOUNT ^ (maximum(years) - minimum(years)) * sum(NC_t_end[n] * esf_costs[n] for n in nodes)
 )
 
@@ -89,7 +89,7 @@ set_optimizer(model, HiGHS.Optimizer)
     mass_balance_NC[n = nodes, y = years; n ∉ hot_cells], 
     sum(NC_t[m, n, y] for m in nodes) - 
     sum(NC_t[n, m, y] for m in nodes) + 
-    get_conditional_variable(model, n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y]
+    get_conditional_variable(n, y, y_ -> y_ > minimum(years), NC_s) ==  NC_s[n, y]
 )
 
 @constraint(
@@ -105,24 +105,24 @@ set_optimizer(model, HiGHS.Optimizer)
     sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
 )
 
-# # hot cell processing capacities
-# @constraint(
-#     model, 
-#     hc_production_cap[hc = hot_cells, y = years], 
-#     sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
-# )
+ # hot cell processing capacities
+ @constraint(
+     model, 
+     hc_production_cap[hc = hot_cells, y = years], 
+     sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
+ )
 
-# # No new casks to hot cell
-# @constraint(
-#     model, 
-#     no_casks_to_hc[hc = hot_cells, y = years], 
-#     sum(NC_t[n, hc, y] for n in nodes) == 0)
+ # No new casks to hot cell
+ @constraint(
+     model, 
+     no_casks_to_hc[hc = hot_cells, y = years], 
+     sum(NC_t[n, hc, y] for n in nodes) == 0)
 
 # no "old" cask from hot cell
-@constraint(
-    model, 
-    no_snf_from_hc[hc = hot_cells, y = years], 
-    sum(SNF_t[hc, n, y] for n in nodes) == 0
+ @constraint(
+     model, 
+     no_snf_from_hc[hc = hot_cells, y = years], 
+     sum(SNF_t[hc, n, y] for n in nodes) == 0
 )
 
 # storage capacities
@@ -142,6 +142,9 @@ set_optimizer(model, HiGHS.Optimizer)
 # transport to end storage facility
 @constraint(model, transport_to_end[n = nodes], NC_t_end[n] == NC_s[n, maximum(years)])
 
+# permanent cisf storing constraint
+#@constraint(model, no_waste_at_reactors[r = reactors, r ∉ ("Gorleben", "Ahaus")], NC_s[r, maximum(years)] == 0)
+
 
 # SNF clearing condition
 @constraint(
@@ -154,8 +157,8 @@ set_optimizer(model, HiGHS.Optimizer)
 # TODO double check! add extra accounting constraint
 @constraint(
     model, 
-    cisf_build_before_store[i = interim_storages, y = years], 
-    SNF_s[i, y] + NC_s[i, y] <= B[i] * 500 #TODO set cisf capacity instead of BIG
+    cisf_build_before_store[i = interim_storages], 
+    sum(SNF_s[i, y] + NC_s[i, y] for y in years) <= B[i] * 500 #TODO set cisf capacity instead of BIG
 )
 
 # constraints to prevent model from using cisfs as transport node
