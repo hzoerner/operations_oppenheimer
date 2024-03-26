@@ -34,6 +34,8 @@ general = get_general_data(path)
 CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
+FIX_COST_RATE = 100000
+HOT_CELL_COSTS = 100 # just for model logic reasons
 
 snf = get_snf_at_reactors(path)
 reactors = keys(snf)
@@ -50,7 +52,7 @@ end
 
 CASK_DECAY = 0.05
 
-DISCOUNT = 1.02
+DISCOUNT = 1.00
 
 INITIAL_VOLUME = sum(values(snf))
 
@@ -65,13 +67,16 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_s[nodes, years] >= 0)
 @variable(model, NC_t_end[nodes] >= 0)
 @variable(model, B[interim_storages], Bin)
+@variable(model, A[reactors, years], Bin)
 
 
 @objective(model, Min, 
     sum(
         DISCOUNT ^ (y - minimum(years)) * sum(transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
-        DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) + 
-        DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) for y in years) + 
+        DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) +
+        DISCOUNT ^ (y - minimum(years)) * HOT_CELL_COSTS * sum(SNF_t[r, hc, y] for r in reactors, hc in hot_cells) +
+        DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) +
+        DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(A[r, y] for r in reactors) for y in years) + 
     CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) +
     DISCOUNT ^ (maximum(years) - minimum(years)) * sum(NC_t_end[n] * esf_costs[n] for n in nodes)
 )
@@ -136,7 +141,14 @@ set_optimizer(model, HiGHS.Optimizer)
 @constraint(
     model, 
     transport_possibility[n = nodes, m = nodes, y = years], 
-    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 2000 #TODO set BIG as small as possible
+    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 20 #TODO set BIG as small as possible
+)
+
+# transport is possible
+@constraint(
+    model, 
+    transport_overall_limit[y = years], 
+    sum(SNF_t[n, m, y] + NC_t[n, m, y] for n in nodes, m in nodes) <= 120
 )
 
 # transport to end storage facility
@@ -154,24 +166,22 @@ set_optimizer(model, HiGHS.Optimizer)
 )
 
 # dont store before you build
-# TODO double check! add extra accounting constraint
 @constraint(
     model, 
     cisf_build_before_store[i = interim_storages], 
     sum(SNF_s[i, y] + NC_s[i, y] for y in years) <= B[i] * 500 #TODO set cisf capacity instead of BIG
 )
 
-# constraints to prevent model from using cisfs as transport node
 @constraint(
-    model, 
-    dont_move_nc_from_cisf[i = interim_storages, y = years], 
-    sum(NC_t[i, n, y] for n in nodes) == 0
+    model,
+    reactor_operating[r = reactors, y = years],
+    SNF_s[r, y] + NC_s[r, y] <= 500 * A[r, y]
 )
 
 @constraint(
-    model, 
-    dont_move_snf_to_cisf[i = interim_storages, y = years], 
-    sum(SNF_t[n, i, y] for n in nodes) == 0
+    model,
+    operation_logic[r = reactors, y = minimum(years):(maximum(years) - 1)],
+    A[r, y] >= A[r, y + 1]
 )
 
 # cask decay
