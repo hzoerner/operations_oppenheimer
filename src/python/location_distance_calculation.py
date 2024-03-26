@@ -1,9 +1,13 @@
 import geopy.distance as distance
 import pandas as pd
+import os
+print(os.getcwd())
 
-excel_path = 'operations_oppenheimer/ExtendedNuclearData.xlsx'
+excel_path = 'operations_oppenheimer/data/ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
-
+final_storage = "Saldenberg"
+final_storage_sheet = "End Storage"
+cost_factor = 75
 # geo coordinates for each interim storage facility
 isf_coords = {"Gorleben": (53.033344625111255, 11.341597461918763),
               "Ahaus": (52.075884172859716, 7.056252098203471),
@@ -32,19 +36,31 @@ cisf_coords = [(49.41887922, 10.42371430), (50.22679584,7.13714757), (53.5972103
 cisf_coords = {k:v for k, v in zip(cisf_names, cisf_coords)}
 
 
-fsf_coords = {"Endlager": (...,...)}
-
 combined_coords = isf_coords | hot_cell_coords | cisf_coords
 
-# calculate distances 
+# calculate distances for regular transport
 rows_list = []
 for f, f_c in combined_coords.items():
     for t, t_c in combined_coords.items():
-        rows_list.append({"from": f, "to": t, "is_possible": 1 if f != t else 0, "costs": distance.distance(f_c, t_c).kilometers})
+        rows_list.append({"from": f, "to": t, "is_possible": 1 if f != t else 0, "costs": 75 * distance.distance(f_c, t_c).kilometers})
 distance_df = pd.DataFrame(rows_list)
 
 # save distance data to excel file     
 with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace", ) as writer:
     distance_df.to_excel(writer, sheet_name=distance_sheet, float_format="%.2f", index=False)
 #distance_df.head()
+
+
+# calculate distances for final storage transport
+fsf_coords = {"Saldenberg": (48.77298963391,13.35212619416),
+              "Gorleben_Endlager": (53.07048829, 11.21265665),
+              "Messel": (49.93831226, 8.749268672)}
+storage_coords = isf_coords | cisf_coords
+fs_costs = []
+for f, f_c in combined_coords.items():
+    fs_costs.append({"from": f, "costs": 75 * distance.distance(f_c, fsf_coords[final_storage]).kilometers})
+fsf_df = pd.DataFrame(fs_costs)
+with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace", ) as writer:
+    fsf_df.to_excel(writer, sheet_name=final_storage_sheet, float_format="%.2f", index=False)
+
 print("Done.")

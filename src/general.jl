@@ -9,7 +9,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "C:/Users/ACER/Desktop/Uni/OR-INF/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
+path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2099
 
@@ -52,7 +52,7 @@ end
 
 CASK_DECAY = 0.05
 
-DISCOUNT = 1.00
+DISCOUNT = 1.03
 
 INITIAL_VOLUME = sum(values(snf))
 
@@ -66,7 +66,7 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_t[nodes, nodes, years] >= 0)
 @variable(model, NC_s[nodes, years] >= 0)
 @variable(model, NC_t_end[nodes] >= 0)
-@variable(model, B[interim_storages], Bin)
+@variable(model, B[interim_storages, minimum(years)-1:maximum(years)], Bin)
 @variable(model, A[reactors, years], Bin)
 
 
@@ -76,8 +76,10 @@ set_optimizer(model, HiGHS.Optimizer)
         DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) +
         DISCOUNT ^ (y - minimum(years)) * HOT_CELL_COSTS * sum(SNF_t[r, hc, y] for r in reactors, hc in hot_cells) +
         DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) +
-        DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(A[r, y] for r in reactors) for y in years) + 
-    CISF_BUILDING_COSTS * sum(B[i] for i in interim_storages) +
+        DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(A[r, y] for r in reactors) + 
+        DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(B[i, y] for i in interim_storages) for y in years ) + 
+    sum(
+        DISCOUNT ^ (y - minimum(years)) * CISF_BUILDING_COSTS * sum(B[i, y] - B[i, y - 1] for i in interim_storages) for y in years ) +
     DISCOUNT ^ (maximum(years) - minimum(years)) * sum(NC_t_end[n] * esf_costs[n] for n in nodes)
 )
 
@@ -138,17 +140,24 @@ set_optimizer(model, HiGHS.Optimizer)
 ) # are capacities fix?
 
 # transport is possible
+#TODO: (Gorleben,Hot Cell 1/2,), (Ahaus, HotCell 1/2) rausnehmen?
 @constraint(
     model, 
     transport_possibility[n = nodes, m = nodes, y = years], 
-    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 100 #TODO set BIG as small as possible
+    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 50 #TODO set BIG as small as possible
+)
+
+@constraint(
+    model,
+    countrywide_transport_cap[y=years],
+    sum(SNF_t[n, m, y] + NC_t[n, m, y] for n in nodes, m in nodes) <= 5*50
 )
 
 # transport to end storage facility
 @constraint(model, transport_to_end[n = nodes], NC_t_end[n] == NC_s[n, maximum(years)])
 
 # permanent cisf storing constraint
-#@constraint(model, no_waste_at_reactors[r = reactors, r ∉ ("Gorleben", "Ahaus")], NC_s[r, maximum(years)] == 0)
+# @constraint(model, no_waste_at_reactors[r = reactors; r ∉ ("Gorleben", "Ahaus")], NC_s[r, maximum(years)] == 0)
 
 
 # SNF clearing condition
@@ -162,9 +171,20 @@ set_optimizer(model, HiGHS.Optimizer)
 @constraint(
     model, 
     cisf_build_before_store[i = interim_storages, y = years], 
-    sum(SNF_s[i, y] + NC_s[i, y]) <= B[i] * 500 #TODO set cisf capacity instead of BIG
+    sum(SNF_t[n, i, y] + NC_t[n, i, y] for n in nodes) <= B[i, y] * 500 #TODO set cisf capacity instead of BIG
 )
 
+@constraint(
+    model,
+    cisf_logic[i = interim_storages, y = minimum(years):(maximum(years) - 1)],
+    B[i, y] <= B[i, y + 1]
+)
+
+@constraint(
+    model,
+    cisf_init[i = interim_storages],
+    B[i, minimum(years)-1] == 0
+)
 @constraint(
     model,
     reactor_operating[r = reactors, y = years],
@@ -219,9 +239,15 @@ end
 CSV.write("snf_shipped.csv", df_SNF_t)
 CSV.write("nc_shipped.csv", df_NC_t)
 
-df_Bi = DataFrame(cisf = String[], build = Int[])
+df_Bi = DataFrame(cisf = String[], year=Int[], build = Int[])
 for i in interim_storages
     append!(df_Bi, DataFrame(cisf = i, build = round(value.(B[i]))))
+end
+
+for i in interim_storages, y in years
+    # println(i, y)
+    # println(round(value.(B[i,y])))
+    append!(df_Bi, DataFrame(cisf=i, year=y, build=round(value.(B[i,y]))))
 end
 
 CSV.write("cisf_build.csv", df_Bi)
@@ -234,3 +260,7 @@ end
 CSV.write("end_transport.csv", df_to_end)
 
 println("Done!")
+
+for y in years
+    println(DISCOUNT ^ (y - minimum(years)) * CISF_BUILDING_COSTS * sum(value.(B[i, y]) - value.(B[i, y - 1]) for i in interim_storages))
+end
