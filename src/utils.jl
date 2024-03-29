@@ -79,3 +79,27 @@ function get_snf_at_node(snf, node)
 
     return 0.0
 end
+
+function get_transport_cap(n, m, cap)
+    if (n,m) ∉ [("Ahaus", "Ahaus_CISF"), ("Gorleben", "Gorleben_CISF")]
+        return cap
+    else
+        return cap * 10
+    end
+end
+
+function total_transport_volume(n, m, yr, snf_t, nc_t)
+    if (n,m) ∉ [("Ahaus", "Ahaus_CISF"), ("Gorleben", "Gorleben_CISF")]
+        return snf_t[n, m, yr] + nc_t[n, m, yr]
+    else
+        return 0
+    end
+end
+
+function get_hybrid_cap(n, y, interim_built, old_cap, new_cap)
+    if B[n, y] == 0
+        return old_cap[n]
+    else
+        return new_cap
+    end
+end
