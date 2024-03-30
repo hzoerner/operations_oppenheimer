@@ -89,4 +89,4 @@ isf_ax = gdf[gdf.name.isin(fsf_coords.keys())].plot(aspect=1.4, ax=isf_ax, marke
 plt.legend(handles=[blue_circle, tomato_x, teal_star], fancybox=True, loc='best', bbox_to_anchor=(0.5, 0., 0.5, 0.5))
 plt.savefig("complete_locations.png")
 
-#plt.show()
+#plt.show() 

@@ -5,10 +5,10 @@ print(os.getcwd())
 
 excel_path = 'operations_oppenheimer/data/ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
-final_storage = "Gorleben_Endlager"
+final_storage = "Lubmin_Endlager"
 final_storage_sheet = "End Storage"
 cost_factor = 75
-nuclear_factor = 5
+nuclear_factor = 200
 cost_factor *= nuclear_factor
 
 # geo coordinates for each interim storage facility
@@ -60,7 +60,7 @@ with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="re
 
 # calculate distances for final storage transport
 fsf_coords = {"Saldenberg": (48.77298963391,13.35212619416),
-              "Gorleben_Endlager": (53.07048829, 11.21265665),
+              "Lubmin_Endlager": isf_coords["Lubmin"],
               "Messel": (49.93831226, 8.749268672)}
 storage_coords = isf_coords | cisf_coords
 fs_costs = []
