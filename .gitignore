@@ -3,3 +3,6 @@
 *.Rproj.user
 *.Rhistory
 *.csv
+.Rproj.user
+*png
+*jpg

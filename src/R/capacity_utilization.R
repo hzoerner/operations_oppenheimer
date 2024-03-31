@@ -39,8 +39,6 @@ util_plot <- ggplot(cap_util, aes(cisf, utilization, fill = n)) +
   
  # geom_text(aes(label = utilization), position = position_dodge(width = .6)) +
   
-  labs(y = "Capacity utilization", fill = "Total number of\nCISF in scenario:", x = "CISF") +
-  
-  theme_bw()
+  labs(y = "Capacity utilization", fill = "Total number of\nCISF in scenario:", x = "CISF") 
 
 ggsave(plot = util_plot, filename = "cap_util_plot.png")
