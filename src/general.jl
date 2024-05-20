@@ -31,6 +31,12 @@ interim_storages = keys(cisf_costs)
 
 general = get_general_data(path)
 
+version = dict(
+    "small" => 150,
+    "medium" => 375,
+    "large" => 500
+    )
+
 CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
@@ -41,14 +47,6 @@ snf = get_snf_at_reactors(path)
 reactors = keys(snf)
 
 reactor_costs = Dict()
-
-# for r in reactors
-#     if r ∈ ("Gorleben", "Ahaus")
-#         reactor_costs[r] = CISF_OPERATING_COSTS
-#     else
-#         reactor_costs[r] = REACTOR_OPERATING_COSTS
-#     end
-# end
 
 for r in reactors
     reactor_costs[r] = REACTOR_OPERATING_COSTS
@@ -70,8 +68,9 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_t[nodes, nodes, years] >= 0)
 @variable(model, NC_s[nodes, years] >= 0)
 @variable(model, NC_t_end[nodes] >= 0)
-@variable(model, B[interim_storages, minimum(years)-1:maximum(years)], Bin)
+@variable(model, B[interim_storages, version, minimum(years)-1:maximum(years)], Bin)
 @variable(model, A[reactors, years], Bin)
+@variable(model, HC[district, years], Bin)
 
 cost_factor = 1/1000
 
@@ -83,11 +82,10 @@ cost_factor = 1/1000
         DISCOUNT ^ (y - minimum(years)) * cost_factor * HOT_CELL_COSTS * sum(SNF_t[r, hc, y] for r in reactors, hc in hot_cells) +
         DISCOUNT ^ (y - minimum(years)) * cost_factor * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) +
         DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(A[r, y] for r in reactors) + 
-        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(B[i, y] for i in interim_storages) for y in years ) + 
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(B[i, v, y] for v in version, i in interim_storages) for y in years ) + 
     sum(
-        DISCOUNT ^ (y - minimum(years)) * cost_factor * CISF_BUILDING_COSTS * sum(B[i, y] - B[i, y - 1] for i in interim_storages) for y in years )
-        # +
-    # DISCOUNT ^ (maximum(years) - minimum(years)) * sum(NC_t_end[n] * cost_factor * esf_costs[n] for n in nodes)
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * cisf_version_cost[version] * sum(B[i, v, y] - B[i, v, y - 1] for v in version, i in interim_storages) +
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * HC_BUILDING_COSTS * sum(HC[i, y] - HC[i, y - 1] for i in interim_storages) for y in years )
 )
 
 # mass balances
@@ -120,11 +118,11 @@ cost_factor = 1/1000
 )
 
  # hot cell processing capacities
- @constraint(
-     model, 
-     hc_production_cap[hc = hot_cells, y = years], 
-     sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
- )
+ #@constraint(
+ #    model, 
+ #    hc_production_cap[hc = hot_cells, y = years], 
+ #    sum(SNF_t[n, hc, y] for n in nodes) <= production_capacities[hc]
+ #)
 
  # No new casks to hot cell
  @constraint(
@@ -137,6 +135,13 @@ cost_factor = 1/1000
      model, 
      no_snf_from_hc[hc = hot_cells, y = years], 
      sum(SNF_t[hc, n, y] for n in nodes) == 0
+)
+
+# dont refill before you build
+@constraint(
+    model, 
+    hc_build_before_refill[hc = hot_cells, y = years], 
+    sum(SNF_t[n, hc, y] for n in nodes) <= HC[i, y] * production_capacities
 )
 
 # storage capacities
@@ -160,12 +165,8 @@ cost_factor = 1/1000
     sum(SNF_t[n, m, y] + NC_t[n, m, y] for n in nodes, m in nodes) <= 5*50
 )
 
-# transport to end storage facility
-# @constraint(model, transport_to_end[n = nodes], NC_t_end[n] == NC_s[n, maximum(years)])
-
 # permanent cisf storing constraint
 @constraint(model, no_waste_at_reactors[r = reactors], NC_s[r, maximum(years)] == 0)
-
 
 # SNF clearing condition
 @constraint(
@@ -178,19 +179,31 @@ cost_factor = 1/1000
 @constraint(
     model, 
     cisf_build_before_store[i = interim_storages, y = years], 
-    sum(SNF_t[n, i, y] + NC_t[n, i, y] for n in nodes) <= B[i, y] * 500 #TODO set cisf capacity instead of BIG
+    sum(SNF_t[n, i, y] + NC_t[n, i, y] for n in nodes) <= sum(B[i, v, y] for v in version) * cisf_capacity[version]
 )
 
 @constraint(
     model,
-    cisf_logic[i = interim_storages, y = minimum(years):(maximum(years) - 1)],
-    B[i, y] <= B[i, y + 1]
+    cisf_build_only_once[i = interim_storages, y = yearls],
+    sum(B[i, v, y] for v in version) <= 1
 )
 
 @constraint(
     model,
-    cisf_init[i = interim_storages],
-    B[i, (minimum(years)-1:minimum(years) + build_time)] == 0
+    cisf_logic[i = interim_storages, v = version, y = minimum(years):(maximum(years) - 1)],
+    B[i, v, y] <= B[i, v, y + 1]
+)
+
+@constraint(
+    model,
+    number_cisf_built,
+    sum(B[i, v, maximum(years)] for v in version, i in interim_storages) == 3
+)
+
+@constraint(
+    model,
+    cisf_init[i = interim_storages, v = version],
+    B[i, v, (minimum(years)-1:minimum(years) + build_time)] == 0
 )
 @constraint(
     model,
@@ -219,11 +232,11 @@ cost_factor = 1/1000
     SNF_s[n, minimum(years) - 1] == get_snf_at_node(snf, n)
 )
 
-# @constraint(
-#     model,
-#     number_cisf_built,
-#     sum(B[i, maximum(years)] for i in interim_storages) == 5
-# )
+@constraint(
+    model,
+    number_cisf_built,
+    sum(B[i, maximum(years)] for i in interim_storages) == 3
+)
 
 optimize!(model)
 obj_value = objective_value(model)
