@@ -9,14 +9,20 @@ using HiGHS
 
 include("utils.jl")
 
-path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
+path = "C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2099
 
 transport_details = get_transport_details(path)
-
 transport_costs = transport_details[2]
-TRANSPORT_POSSIBLE = transport_details[1]
+
+function is_transport_possible(n, m)
+    if n == m
+        return 0
+    else
+        return 1
+    end
+end
 
 production_capacities = get_hot_cell_capacities(path)
 hot_cells = keys(production_capacities)
@@ -24,19 +30,15 @@ hot_cells = keys(production_capacities)
 storage_cap = get_storage_capacities(path)
 nodes = keys(storage_cap)
 
-esf_costs = get_end_storage_transport_costs(path)
-
 cisf_costs = get_cisf_costs(path)
 interim_storages = keys(cisf_costs)
 
 general = get_general_data(path)
+districts = ["Altmark", "Finkenkrug", "Allgäu"]
 
-version = dict(
-    "small" => 150,
-    "medium" => 375,
-    "large" => 500
-    )
+versions = [Version("small", 150, 50000000), Version("medium", 375, 100000000), Version("large", 500, 150000000)]
 
+HC_BUILDING_COSTS = 300000000
 CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
@@ -68,12 +70,11 @@ set_optimizer(model, HiGHS.Optimizer)
 @variable(model, NC_t[nodes, nodes, years] >= 0)
 @variable(model, NC_s[nodes, years] >= 0)
 @variable(model, NC_t_end[nodes] >= 0)
-@variable(model, B[interim_storages, version, minimum(years)-1:maximum(years)], Bin)
+@variable(model, B[interim_storages, map(v -> v.size, versions), minimum(years)-1:maximum(years)], Bin)
 @variable(model, A[reactors, years], Bin)
-@variable(model, HC[district, years], Bin)
+@variable(model, HC[interim_storages, minimum(years)-1:maximum(years)], Bin)
 
 cost_factor = 1/1000
-
 
 @objective(model, Min, 
     sum(
@@ -81,10 +82,10 @@ cost_factor = 1/1000
         DISCOUNT ^ (y - minimum(years)) * sum(cost_factor * reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) +
         DISCOUNT ^ (y - minimum(years)) * cost_factor * HOT_CELL_COSTS * sum(SNF_t[r, hc, y] for r in reactors, hc in hot_cells) +
         DISCOUNT ^ (y - minimum(years)) * cost_factor * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) +
-        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(A[r, y] for r in reactors) + 
-        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(B[i, v, y] for v in version, i in interim_storages) for y in years ) + 
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(A[r, y] for r in reactors) +
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * FIX_COST_RATE * sum(B[i, v.size, y] for v in versions, i in interim_storages) for y in years ) + 
     sum(
-        DISCOUNT ^ (y - minimum(years)) * cost_factor * cisf_version_cost[version] * sum(B[i, v, y] - B[i, v, y - 1] for v in version, i in interim_storages) +
+        DISCOUNT ^ (y - minimum(years)) * cost_factor * sum(v.costs * B[i, v.size, y] - B[i, v.size, y - 1] for v in versions, i in interim_storages) +
         DISCOUNT ^ (y - minimum(years)) * cost_factor * HC_BUILDING_COSTS * sum(HC[i, y] - HC[i, y - 1] for i in interim_storages) for y in years )
 )
 
@@ -141,7 +142,7 @@ cost_factor = 1/1000
 @constraint(
     model, 
     hc_build_before_refill[hc = hot_cells, y = years], 
-    sum(SNF_t[n, hc, y] for n in nodes) <= HC[i, y] * production_capacities
+    sum(SNF_t[n, hc, y] for n in nodes) <= HC[hc, y] * production_capacities
 )
 
 # storage capacities
@@ -156,7 +157,7 @@ cost_factor = 1/1000
 @constraint(
     model, 
     transport_possibility[n = nodes, m = nodes, y = years], 
-    SNF_t[n, m, y] + NC_t[n, m, y] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 50 #TODO set BIG as small as possible
+    SNF_t[n, m, y] + NC_t[n, m, y] <= is_transport_possible(n, m)  * 50 #TODO set BIG as small as possible
 )
 
 @constraint(

@@ -103,3 +103,9 @@ function get_hybrid_cap(n, y, interim_built, old_cap, new_cap)
         return new_cap
     end
 end
+
+struct Version
+    size::String
+    capacity::Int32
+    costs::Int32
+end
