@@ -8,8 +8,9 @@ import geopandas as gpd
 import shapely
 from pyproj import Transformer
 
-admin_map_path = 'operations_oppenheimer/data/vg2500_12-31.utm32s.shape/vg2500/VG2500_KRS.shp'
-excel_path = 'operations_oppenheimer/data/ExtendedNuclearData.xlsx'
+admin_map_path = '/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/vg2500_12-31.utm32s.shape/vg2500/VG2500_KRS.shp'
+admin_map_path_2 = '/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/vg2500_12-31.utm32s.shape/vg2500/VG2500_RBZ.shp'
+excel_path = '/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
 final_storage_sheet = "End Storage"
 cost_factor = 75
@@ -17,10 +18,13 @@ nuclear_factor = 100
 cost_factor *= nuclear_factor
 
 # read admin area df
-admin_area_df = gpd.read_file(admin_map_path)
+krs_area_df = gpd.read_file(admin_map_path)
+rbz_area_df = gpd.read_file(admin_map_path_2)
 
 # remove cities
-admin_area_df = admin_area_df[admin_area_df.BEZ.isin(['Kreis', 'Landkreis'])]
+# admin_area_df = admin_area_df[(admin_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (admin_area.SN_L.isin(['01', ]))]
+krs_area_df = krs_area_df[(krs_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (~krs_area_df.SN_L.isin(rbz_area_df.SN_L.values))]
+admin_area_df = pd.concat([krs_area_df, rbz_area_df], ignore_index=True)
 # Define the UTM32 and WGS84 projections
 utm32_crs = "EPSG:32632"  # UTM zone 32N
 wgs84_crs = "EPSG:4326"   # WGS 84
@@ -71,10 +75,16 @@ isf_coords = {"Gorleben": Point(53.033344625111255, 11.341597461918763),
               "Unterweser": Point(53.430121612826966, 8.476324972847728),
               "Lubmin": Point(54.14141668772474, 13.677069821066244)}
 
+
 # transform regional data in dict format
 admin_coords = {k:v for k, v in zip(admin_area_df["GEN"], admin_area_df["centroids"])}
 
+
 combined_coords = isf_coords | admin_coords
+
+# add hot cell locations
+hot_cell_coords = {"HC " + k: v for k, v in combined_coords.items()}
+combined_coords = combined_coords | hot_cell_coords
 
 # calculate distances for regular transport
 rows_list = []
@@ -94,7 +104,7 @@ with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="re
 fsf_coords = {"Saldenberg": Point(48.77298963391,13.35212619416),
               "Lubmin_Endlager": isf_coords["Lubmin"],
               "Messel": Point(49.93831226, 8.749268672)}
-storage_coords = isf_coords | admin_coords | fsf_coords
+storage_coords = isf_coords | admin_coords | fsf_coords | hot_cell_coords
 fs_costs = []
 for f, f_c in combined_coords.items():
     f_coords = (f_c.x, f_c.y)
@@ -117,5 +127,12 @@ cisf_df["costs"] = 999
 with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace", ) as writer:
     cisf_df.to_excel(writer, sheet_name="CISF", float_format="%.2f", index=False)
 
+# Update Hot Cell sheet to include all administrative areas
+hot_cell_df = pd.DataFrame()
+hot_cell_df["name"] = list(hot_cell_coords.keys())
+hot_cell_df["production"] = 35
+hot_cell_df["capacity"] = 0
+with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace", ) as writer:
+    hot_cell_df.to_excel(writer, sheet_name="Hot Cells", float_format="%.2f", index=False)
 
 print("Done.")
