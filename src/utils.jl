@@ -96,6 +96,14 @@ function total_transport_volume(n, m, yr, snf_t, nc_t)
     end
 end
 
+function is_transport_possible(n, m)
+    if n == m
+        return 0
+    else
+        return 1
+    end
+end
+
 function get_hybrid_cap(n, y, interim_built, old_cap, new_cap)
     if B[n, y] == 0
         return old_cap[n]
@@ -103,6 +111,21 @@ function get_hybrid_cap(n, y, interim_built, old_cap, new_cap)
         return new_cap
     end
 end
+
+function get_hot_cells_and_cisf(path)
+    df = DataFrame(XLSX.readtable(path, "Districts"))
+    districts =df.name
+    hc = Building[]
+    cisf = Building[]
+
+    for d in districts
+        push!(hc, Building("hc", d))
+        push!(cisf, Building("cisf", d))
+    end
+    
+    return hc, cisf, districts
+end
+
 
 struct Version
     size::String
