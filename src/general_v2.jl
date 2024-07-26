@@ -86,7 +86,7 @@ cost_factor = 1/1000
         cost_factor * FIX_COST_RATE * sum(A[r, y] for r in reactors) + 
         cost_factor * FIX_COST_RATE * sum(B[d, v.size, y] for v in versions, d in interim_storages) for y in years) + 
 
-    sum(LICENSE_EXTENSION_COSTS * A[r, minimum(years) + p * MAXIMUM_RUNTIME] for p in 1:EXTENSION_PERIOD) +
+    #sum(LICENSE_EXTENSION_COSTS * A[r, minimum(years) + p * MAXIMUM_RUNTIME] for p in 1:EXTENSION_PERIOD) +
     sum(
         cost_factor * sum(v.costs * B[d, v.size, y] - B[d, v.size, y - 1] for v in versions, d in interim_storages) +
         cost_factor * HC_BUILDING_COSTS * sum(HC[d, y] - HC[d, y - 1] for d in hot_cells) for y in years )
