@@ -4,6 +4,7 @@ Pkg.add("JuMP")
 Pkg.add("GLPK")
 Pkg.add("HiGHS")
 Pkg.add("DataFrames")
+Pkg.add("CSV")
 using JuMP
 using GLPK
 using DataFrames
@@ -13,7 +14,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
+path = "../data/ExtendedNuclearData.xlsx"
 
 years = 2030:2060
 
