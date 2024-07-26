@@ -5,6 +5,7 @@ Pkg.add("GLPK")
 Pkg.add("HiGHS")
 Pkg.add("DataFrames")
 Pkg.add("CSV")
+Pkg.add("XLSX")
 using JuMP
 using GLPK
 using DataFrames
