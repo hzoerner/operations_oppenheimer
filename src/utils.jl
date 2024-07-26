@@ -130,5 +130,5 @@ end
 struct Version
     size::String
     capacity::Int32
-    costs::Int32
+    costs::Float32
 end
