@@ -3,6 +3,7 @@ using Pkg
 Pkg.add("JuMP")
 Pkg.add("GLPK")
 Pkg.add("HiGHS")
+Pkg.add("DataFrames")
 using JuMP
 using GLPK
 using DataFrames
