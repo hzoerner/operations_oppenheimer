@@ -1,5 +1,8 @@
 ### this file is supposed to contain the general model without any specifications to a plan case
-
+using Pkg
+Pkg.add("JuMP")
+Pkg.add("GLPK")
+Pkg.add("HiGHS")
 using JuMP
 using GLPK
 using DataFrames
