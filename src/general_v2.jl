@@ -9,7 +9,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/data/NuclearDummyData.xlsx"
+path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2060
 
@@ -36,7 +36,7 @@ versions = [Version("small", 150, 50000000), Version("medium", 375, 100000000), 
 CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
-HC_BUILDING_COSTS = 3000000
+HC_BUILDING_COSTS = 300000000
 FIX_COST_RATE = 100000
 HOT_CELL_COSTS = 100 # just for model logic reasons
 build_time = 20
@@ -182,10 +182,17 @@ cost_factor = 1/1000
     sum(SNF_t[n, i, y] + NC_t[n, i, y] for n in nodes) <= sum(B[i, v.size, y] * v.capacity for v in versions) #TODO set cisf capacity instead of BIG
 )
 
+# CISF capacity constraint
 @constraint(
     model,
-    cisf_logic[d = interim_storages, y = minimum(years):(maximum(years) - 1)],
-    sum(B[d, v.size, y] for v in versions) <= sum(B[d, v.size, y + 1] for v in versions)
+    cisf_storage_capacity[i=interim_storages, y=years],
+    SNF_s[i, y] + NC_s[i, y] <= sum(B[i, v.size, y] * v.capacity for v in versions)
+)
+
+@constraint(
+    model,
+    cisf_logic[d = interim_storages, y = minimum(years):(maximum(years) - 1), v=versions],
+    B[d, v.size, y] <= B[d, v.size, y + 1]
 )
 
 @constraint(
@@ -197,7 +204,7 @@ cost_factor = 1/1000
 @constraint(
     model,
     number_cisf_built,
-    sum(B[d, v.size, maximum(years)] for v in versions, d in interim_storages) == 2
+    sum(B[d, v.size, maximum(years)] for v in versions, d in interim_storages) == 5
 )
 
 @constraint(
@@ -224,3 +231,78 @@ for v in all_variables(model)
             println("Variable: ", v, " = ", value(v))
     end
 end
+
+
+df_SNF_s = DataFrame(node = String[], year = Int[], SNF = Float32[])
+df_NC_s = DataFrame(node = String[], year = Int[], NC = Float32[])
+
+for n in nodes, y in years
+    append!(df_SNF_s, DataFrame(node = n, year = y, SNF = round(value.(SNF_s[n,y]))))
+    append!(df_NC_s, DataFrame(node = n, year = y, NC = round(value.(NC_s[n,y]))))
+end
+
+CSV.write("snf_stored.csv", df_SNF_s)
+CSV.write("nc_stored.csv", df_NC_s)
+
+df_SNF_t = DataFrame(from = String[], to = String[], year = Int[], SNF = Float32[])
+df_NC_t = DataFrame(from = String[], to = String[], year = Int[], NC = Float32[])
+
+for n in nodes, m in nodes, y in years
+    append!(df_SNF_t, DataFrame(from = n, to = m, year = y, SNF = round(value.(SNF_t[n,m,y]))))
+    append!(df_NC_t, DataFrame(from = n, to = m, year = y, NC = round(value.(NC_t[n,m,y]))))
+end
+
+CSV.write("snf_shipped.csv", df_SNF_t)
+CSV.write("nc_shipped.csv", df_NC_t)
+
+df_Bi = DataFrame(cisf = String[], size=String[], year=Int[], build = Int[])
+# for i in interim_storages
+#     append!(df_Bi, DataFrame(cisf = i, build = round(value.(B[i]))))
+# end
+
+for i in interim_storages, y in years, v in versions
+    # println(i, y)
+    # println(round(value.(B[i,y])))
+    append!(df_Bi, DataFrame(cisf=i, size=v.size, year=y, build=round(value.(B[i,v.size,y]))))
+end
+
+CSV.write("cisf_build.csv", df_Bi)
+
+df_to_end = DataFrame(node = String[], NC = Int[])
+for i in nodes
+    append!(df_to_end, DataFrame(node = i,NC = round(value.(NC_t_end[i]))))
+end
+
+CSV.write("end_transport.csv", df_to_end)
+
+println("Done!")
+
+for y in years
+    println(DISCOUNT ^ (y - minimum(years)) * CISF_BUILDING_COSTS * sum(value.(B[i, y]) - value.(B[i, y - 1]) for i in interim_storages))
+end
+
+transport_eval = Dict()
+reactor_eval = Dict()
+hc_eval = Dict()
+cisf_eval = Dict()
+reactor_fix = Dict()
+cisf_fix = Dict()
+cisf_investment = Dict()
+
+for y in years
+    transport_eval[y] = (DISCOUNT ^ (y - minimum(years)) * sum(transport_costs[string(n, "-", m)] * (value.(SNF_t[n, m, y]) + value.(NC_t[n, m, y])) for n in nodes, m in nodes))
+    reactor_eval[y] = DISCOUNT ^ (y - minimum(years)) * sum(reactor_costs[r] * value.((SNF_s[r, y]) + value.(NC_s[r, y])) for r in reactors)
+    hc_eval[y] = DISCOUNT ^ (y - minimum(years)) * HOT_CELL_COSTS * sum(value.(SNF_t[r, hc, y]) for r in reactors, hc in hot_cells)
+    cisf_eval[y] = DISCOUNT ^ (y - minimum(years)) * CISF_OPERATING_COSTS * sum( value.(SNF_s[i, y]) + value.(NC_s[i, y]) for i in interim_storages)
+    reactor_fix[y] = DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(value.(A[r, y]) for r in reactors)
+    cisf_fix[y] = DISCOUNT ^ (y - minimum(years)) * FIX_COST_RATE * sum(value.(B[i, y]) for i in interim_storages)
+    cisf_investment[y] = DISCOUNT ^ (y - minimum(years)) * CISF_BUILDING_COSTS * sum(value.(B[i, y]) - value.(B[i, y - 1]) for i in interim_storages)
+end
+
+yearly_costs = DataFrame(year=Int[], transport=Int[], reactor=Int[], hc=Int[], cisf=Int[], reactor_fix=Int[], cisf_fix=Int[], cisf_investment=Int[])
+for y in years
+    append!(yearly_costs, DataFrame(year=y, transport=round(transport_eval[y]), reactor=round(reactor_eval[y]),
+            hc=round(hc_eval[y]), cisf=round(cisf_eval[y]), reactor_fix=round(reactor_fix[y]), cisf_fix=round(cisf_fix[y]), cisf_investment=round(cisf_investment[y])))
+end
+
+CSV.write("yearly_costs.csv", yearly_costs)

@@ -23,8 +23,10 @@ rbz_area_df = gpd.read_file(admin_map_path_2)
 
 # remove cities
 # admin_area_df = admin_area_df[(admin_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (admin_area.SN_L.isin(['01', ]))]
-krs_area_df = krs_area_df[(krs_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (~krs_area_df.SN_L.isin(rbz_area_df.SN_L.values))]
-admin_area_df = pd.concat([krs_area_df, rbz_area_df], ignore_index=True)
+# krs_area_df = krs_area_df[(krs_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (~krs_area_df.SN_L.isin(rbz_area_df.SN_L.values))]
+# admin_area_df = pd.concat([krs_area_df, rbz_area_df], ignore_index=True)
+
+admin_area_df = rbz_area_df
 # Define the UTM32 and WGS84 projections
 utm32_crs = "EPSG:32632"  # UTM zone 32N
 wgs84_crs = "EPSG:4326"   # WGS 84
