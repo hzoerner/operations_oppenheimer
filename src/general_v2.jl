@@ -154,10 +154,10 @@ cost_factor = 1/1000
     sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
 )
 
-@constrain(
+@constraint(
     model,
     hot_cell_count,
-    sum(HC[hc, max(years)] for hc in hot_cells) <= 5
+    sum(HC[hc, maximum(years)] for hc in hot_cells) <= 5
 )
 
 # storage capacities
