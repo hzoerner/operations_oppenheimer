@@ -15,7 +15,14 @@ using HiGHS
 
 include("utils.jl")
 
-path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
+path = ""
+
+if isempty(ARGS)
+    path = "dummy/path/ExtendedNuclearData.xlsx" #individual absolute filepath
+else
+    path = ARGS[1]
+end
+
 
 years = 2030:2060
 
