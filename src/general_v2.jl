@@ -44,7 +44,7 @@ CISF_OPERATING_COSTS = general["CISF_operation_costs"]
 REACTOR_OPERATING_COSTS = general["Reaktor_operation_costs"]
 HC_BUILDING_COSTS = 300000000
 FIX_COST_RATE = 100000
-HOT_CELL_COSTS = 100 # just for model logic reasons
+HOT_CELL_COSTS = 2000000 # just for model logic reasons
 build_time = 20
 snf = get_snf_at_reactors(path)
 reactors = keys(snf)
@@ -145,6 +145,12 @@ cost_factor = 1/1000
     model, 
     mass_balance_hc[hc = hot_cells, y = years], 
     sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
+)
+
+@constrain(
+    model,
+    hot_cell_count,
+    sum(HC[hc, max(years)] for hc in hot_cells) <= 5
 )
 
 # storage capacities
@@ -282,6 +288,12 @@ for i in interim_storages, y in years, v in versions
 end
 
 CSV.write("cisf_build.csv", df_Bi)
+
+df_Ai = DataFrame(reactor = String[], year=Int[], build = Int[])
+for r in reactors, y in years
+    append!(df_Ai, DataFrame(reactor=r, year=y, build=round(value.(A[r,y]))))
+end
+CSV.write("reactor_operating.csv", df_Ai)
 
 df_to_end = DataFrame(node = String[], NC = Int[])
 for i in nodes
