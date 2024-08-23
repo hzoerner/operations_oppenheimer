@@ -15,7 +15,7 @@ using HiGHS
 
 include("utils.jl")
 
-path = "../data/ExtendedNuclearData.xlsx"
+path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
 
 years = 2030:2060
 
@@ -138,6 +138,13 @@ cost_factor = 1/1000
      model, 
      no_snf_from_hc[hc = hot_cells, y = years], 
      sum(SNF_t[hc, n, y] for n in nodes) == 0
+)
+
+# hot cell mass balance
+@constraint(
+    model, 
+    mass_balance_hc[hc = hot_cells, y = years], 
+    sum(SNF_t[n, hc, y] for n in nodes) == sum(NC_t[hc, n, y] for n in nodes)
 )
 
 # storage capacities
