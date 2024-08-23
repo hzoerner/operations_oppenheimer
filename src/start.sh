@@ -12,7 +12,4 @@ export JULIA_DEPOT_PATH="/net/work/wimmers/juliapkg"
 
 module add julia/1.7.3
 
-julia src/general_v2.jl
-
-
-
+julia src/general_v2.jl "/net/work/wimmers/operations_oppenheimer/data/ExtendedNuclearData.xlsx"
