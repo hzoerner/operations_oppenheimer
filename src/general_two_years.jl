@@ -42,7 +42,10 @@ interim_storages = keys(cisf_costs)
 
 general = get_general_data(path)
 
-versions = [Version("small", 150, 96444026.38), Version("medium", 375, 142844431.51), Version("large", 500, 189244836.64)]
+versions = [Version("small", 150, 96444026.38), 
+            Version("medium", 375, 142844431.51),
+            Version("large", 500, 189244836.64),
+            Version("extra_large", 1075, 341703310.66)]
 
 CISF_BUILDING_COSTS = general["CISF_building_costs"]
 CISF_OPERATING_COSTS = general["CISF_operation_costs"]
@@ -85,7 +88,7 @@ cost_factor = 1/1000
     sum(
         sum(cost_factor * transport_costs[string(n, "-", m)] * (SNF_t[n, m, y] + NC_t[n, m, y]) for n in nodes, m in nodes) + 
         sum(cost_factor * reactor_costs[r] * (SNF_s[r, y] + NC_s[r, y]) for r in reactors) +
-        cost_factor * HOT_CELL_COSTS * sum(SNF_t[r, hc, y] for r in reactors, hc in hot_cells) +
+        cost_factor * HOT_CELL_COSTS * sum(SNF_t[n, hc, y] for n in reactors, hc in hot_cells) +
         cost_factor * CISF_OPERATING_COSTS * sum( SNF_s[i, y] + NC_s[i, y] for i in interim_storages) +
         cost_factor * FIX_COST_RATE * sum(A[r, y] for r in reactors) + 
         cost_factor * FIX_COST_RATE * sum(B[d, v.size, y] for v in versions, d in interim_storages) for y in years) + 
