@@ -15,6 +15,12 @@ function get_hot_cell_capacities(path)
     return production_capacities
 end
 
+function get_hot_cells(path)
+    df = DataFrame(XLSX.readtable(path, "Hot Cells"))
+    hot_cells = df.name
+    return hot_cells
+end
+
 function get_storage_capacities(path)
     storage_capacities = Dict()
 
@@ -41,6 +47,11 @@ function get_cisf_costs(path)
     costs = Dict(df.name[i] => df.costs[i] for i in 1:nrow(df))
 
     return costs
+end
+
+function get_cisfs(path)
+    df = DataFrame(XLSX.readtable(path, "CISF"))
+    return df.name
 end
 
 function get_reactor_costs(path)

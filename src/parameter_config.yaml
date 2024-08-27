@@ -1,0 +1,22 @@
+hot_cells:
+  max_count: [1,2,3,4,5,6, null]
+  construction_cost: [1000000, 2000000, 3000000]
+transport_costs:
+  cost_factor: 75
+  nuclear_factor: 100
+cisf:
+  count: [1,2,3,4,5,6,7,null]
+  versions:
+    - size: small
+      capacity: 150
+      costs: 96444026.38
+    - size: medium
+      capacity: 375
+      costs: 142844431.51
+    - size: large
+      capacity: 500
+      costs: 189244836.64
+  operating_costs: 14117.6
+time_constraints:
+  min_year: 2030
+  max_year: 2031
