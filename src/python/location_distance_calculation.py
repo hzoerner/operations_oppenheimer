@@ -13,9 +13,9 @@ admin_map_path_2 = '/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF
 excel_path = '/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx'
 distance_sheet = "Transport"
 final_storage_sheet = "End Storage"
-cost_factor = 75
-nuclear_factor = 100
-cost_factor *= nuclear_factor
+# cost_factor = 75
+# nuclear_factor = 100
+cost_factor = 1 
 
 # read admin area df
 krs_area_df = gpd.read_file(admin_map_path)
@@ -23,10 +23,10 @@ rbz_area_df = gpd.read_file(admin_map_path_2)
 
 # remove cities
 # admin_area_df = admin_area_df[(admin_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (admin_area.SN_L.isin(['01', ]))]
-# krs_area_df = krs_area_df[(krs_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (~krs_area_df.SN_L.isin(rbz_area_df.SN_L.values))]
-# admin_area_df = pd.concat([krs_area_df, rbz_area_df], ignore_index=True)
+krs_area_df = krs_area_df[(krs_area_df.BEZ.isin(['Kreis', 'Landkreis'])) & (~krs_area_df.SN_L.isin(rbz_area_df.SN_L.values))]
+admin_area_df = pd.concat([krs_area_df, rbz_area_df], ignore_index=True)
 
-admin_area_df = rbz_area_df
+# admin_area_df = rbz_area_df
 # Define the UTM32 and WGS84 projections
 utm32_crs = "EPSG:32632"  # UTM zone 32N
 wgs84_crs = "EPSG:4326"   # WGS 84
@@ -94,7 +94,7 @@ for f_name, f_point in combined_coords.items():
     f_c = (f_point.x, f_point.y)
     for t_name, t_point in combined_coords.items():
         t_c = (t_point.x, t_point.y)
-        rows_list.append({"from": f_name, "to": t_name, "is_possible": 1 if f_name != t_name else 0, "costs": max(375, cost_factor * distance.distance(f_c, t_c).kilometers)})
+        rows_list.append({"from": f_name, "to": t_name, "is_possible": 1 if f_name != t_name else 0, "costs": max(1, cost_factor * distance.distance(f_c, t_c).kilometers)})
 distance_df = pd.DataFrame(rows_list)
 
 # save distance data to excel file     

@@ -240,7 +240,7 @@ for n_hc in max_hc_counts, hc_cost in hc_construction_costs, n_cisf in cisf_coun
         @constraint(
             model,
             number_cisf_built,
-            sum(B[d, v.size, maximum(years)] for v in versions, d in interim_storages) == n_cisf
+            sum(B[d, v.size, maximum(years)] for v in versions, d in interim_storages) <= n_cisf
         )
     end
 
