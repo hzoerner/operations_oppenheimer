@@ -100,7 +100,7 @@ function save_storage(n_hc, n_cisf, nodes, SNF_s, NC_s)
     println("Storage saved to $dir_path")
 end
 
-function save_transport(n_hc, n_cisf, nodes, SNF_t, NC_t)
+function save_transport(n_hc, n_cisf, reactors, hot_cells, interim_storages, SNF_t, NC_t)
     # Create a directory path based on the parameter combination
     dir_path = joinpath("storage", "n_hc_$(n_hc)", "n_cisf_$(n_cisf)")
     
@@ -110,9 +110,12 @@ function save_transport(n_hc, n_cisf, nodes, SNF_t, NC_t)
     df_SNF_t = DataFrame(from = String[], to = String[], SNF = Float32[])
     df_NC_t = DataFrame(from = String[], to = String[], NC = Float32[])
 
-    for n in nodes, m in nodes
-        append!(df_SNF_t, DataFrame(from = n, to = m, SNF = round(value.(SNF_t[n,m]))))
-        append!(df_NC_t, DataFrame(from = n, to = m, NC = round(value.(NC_t[n,m]))))
+    for r in reactors, hc in hot_cells
+        append!(df_SNF_t, DataFrame(from = r, to = hc, SNF = round(value.(SNF_t[r,hc]))))
+    end
+
+    for hc in hot_cells, i in interim_storages
+        append!(df_NC_t, DataFrame(from = hc, to = i, NC = round(value.(NC_t[hc,i]))))
     end
 
     CSV.write(joinpath(dir_path, "snf_shipped.csv"), df_SNF_t)

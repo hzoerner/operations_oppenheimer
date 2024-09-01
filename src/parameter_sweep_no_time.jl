@@ -18,13 +18,13 @@ pwd()
 path = ""
 
 if isempty(ARGS)
-    path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx" #individual absolute filepath
+    path = "C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/data/ExtendedNuclearData.xlsx" #individual absolute filepath
 else
     path = ARGS[1]
 end
 
 # Load parameter config
-parameter_grid = YAML.load_file("/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/src/parameter_config.yaml")
+parameter_grid = YAML.load_file("C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/src/parameter_config.yaml")
 
 # initialize transport information
 TRANSPORT_POSSIBLE, transport_costs = get_transport_details(path)
@@ -58,14 +58,15 @@ cisf_counts = parameter_grid["cisf"]["count"]
 
 for n_hc in max_hc_counts, n_cisf in cisf_counts
 
+    print("Run model with max " + n_hc + " hot cells and max " + n_cisf + " cisf.")
     #create model and attach solver
     model = Model()
     set_optimizer(model, HiGHS.Optimizer)
 
     #create all variables we need
     #create all variables we need
-    @variable(model, SNF_t[nodes, nodes] >= 0)
-    @variable(model, NC_t[nodes, nodes] >= 0)
+    @variable(model, SNF_t[reactors, hot_cells] >= 0)
+    @variable(model, NC_t[hot_cells, interim_storages] >= 0)
     @variable(model, B[interim_storages, map(v -> v.size, versions)], Bin)
     @variable(model, HC[hot_cells], Bin)
 
@@ -73,9 +74,9 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
 
     @objective(model, Min,
         # transportation costs
-        sum(cost_factor * transport_nuclear_factor *  transport_costs[string(n, "-", m)] * (SNF_t[n, m] + NC_t[n, m]) for n in nodes, m in nodes) +
+        cost_factor * transport_nuclear_factor * (sum(transport_costs[string(r, "-", hc)] * SNF_t[r, hc] for r in reactors, hc in hot_cells) + sum(transport_costs[string(hc, "-", i)] * NC_t[hc, i] for hc in hot_cells, i in interim_storages)) +
         # hot cell repacking costs
-        cost_factor * HOT_CELL_COSTS * sum(SNF_t[n, hc] for n in nodes, hc in hot_cells) + 
+        cost_factor * HOT_CELL_COSTS * sum(SNF_t[r, hc] for r in reactors, hc in hot_cells) + 
         # CISF construction costs
         sum(v.costs * B[d, v.size] for v in versions, d in interim_storages) +
         # hot cell construction costs
@@ -86,41 +87,41 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
     @constraint(
         model, 
         hc_production_cap[hc = hot_cells], 
-        sum(SNF_t[n, hc] for n in nodes) <= HC[hc] * 2000
+        sum(SNF_t[r, hc] for r in reactors) <= HC[hc] * 2000
     )
 
-    # No new casks to hot cell
-    @constraint(
-        model, 
-        no_casks_to_hc[hc = hot_cells], 
-        sum(NC_t[n, hc] for n in nodes) == 0)
+    # # No new casks to hot cell
+    # @constraint(
+    #     model, 
+    #     no_casks_to_hc[hc = hot_cells], 
+    #     sum(NC_t[n, hc] for n in nodes) == 0)
 
-    # no "old" cask from hot cell
-    @constraint(
-        model, 
-        no_snf_from_hc[hc = hot_cells], 
-        sum(SNF_t[hc, n] for n in nodes) == 0
-    )
+    # # no "old" cask from hot cell
+    # @constraint(
+    #     model, 
+    #     no_snf_from_hc[hc = hot_cells], 
+    #     sum(SNF_t[hc, n] for n in nodes) == 0
+    # )
 
     # hot cell mass balance
     @constraint(
         model, 
         mass_balance_hc[hc = hot_cells], 
-        sum(SNF_t[n, hc] for n in nodes) == sum(NC_t[hc, n] for n in nodes)
+        sum(SNF_t[r, hc] for r in reactors) == sum(NC_t[hc, i] for i in interim_storages)
     )
 
-    # everything processed in hot cells
-    @constraint(
-        model,
-        ensure_processing,
-        sum(NC_t[hc, n] for hc in hot_cells, n in nodes) == INITIAL_VOLUME
-    )
+    # # everything processed in hot cells
+    # @constraint(
+    #     model,
+    #     ensure_processing,
+    #     sum(NC_t[hc, n] for hc in hot_cells, n in nodes) == INITIAL_VOLUME
+    # )
 
-    @constraint(
-        model,
-        ensure_nc_quantity,
-        sum(NC_t[n, m] for n in nodes, m in nodes) == INITIAL_VOLUME
-    )
+    # @constraint(
+    #     model,
+    #     ensure_nc_quantity,
+    #     sum(NC_t[n, m] for n in nodes, m in nodes) == INITIAL_VOLUME
+    # )
 
     # other nodes   ###################################################################################
     # ISF mass balance
@@ -146,24 +147,24 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
 
     #######################################################################################################
     ### transport capacity restrictions
-    @constraint(
-        model, 
-        transport_possibility[n = nodes, m = nodes], 
-        SNF_t[n, m] + NC_t[n, m] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 5000
-    )
+    # @constraint(
+    #     model, 
+    #     transport_possibility[n = nodes, m = nodes], 
+    #     SNF_t[n, m] + NC_t[n, m] <= TRANSPORT_POSSIBLE[string(n, "-", m)] * 5000
+    # )
 
     #NC to CISF
     @constraint(
         model, 
         target_condition, 
-        sum(NC_t[n, i] for n in nodes, i in interim_storages) == INITIAL_VOLUME
+        sum(NC_t[hc, i] for hc in hot_cells, i in interim_storages) == INITIAL_VOLUME
     )
 
     # CISF related constraints
     @constraint(
         model, 
         cisf_build_before_store[i = interim_storages], 
-        sum(SNF_t[n, i] + NC_t[n, i] for n in nodes) <= sum(B[i, v.size] * v.capacity for v in versions)
+        sum(NC_t[hc, i] for hc in hot_cells) <= sum(B[i, v.size] * v.capacity for v in versions)
     )
 
     if n_cisf !== nothing
@@ -188,17 +189,17 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
         sum(B[d, v.size] for v in versions) <= 1
     )
 
-    @constraint(
-        model,
-        no_snf_to_cisf,
-        sum(SNF_t[n, i] for n in nodes, i in interim_storages) == 0
-    )
+    # @constraint(
+    #     model,
+    #     no_snf_to_cisf,
+    #     sum(SNF_t[r, i] for n in nodes, i in interim_storages) == 0
+    # )
 
     # initialize snf at reactors
     @constraint(
         model, 
-        initial_snf[n = nodes], 
-        sum(SNF_t[n, m] for m in nodes) == get_snf_at_node(snf, n)
+        initial_snf[r = reactors], 
+        sum(SNF_t[r, hc] for hc in hot_cells) == get_snf_at_node(snf, r)
     )
 
     optimize!(model)
@@ -207,7 +208,7 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
         # A solution was found, save the relevant data
         println("Optimal solution found. Saving data...")
         #save_storage(n_hc, n_cisf, nodes, SNF_s, NC_s)
-        save_transport(n_hc, n_cisf, nodes, SNF_t, NC_t)
+        save_transport(n_hc, n_cisf, reactors, hot_cells, interim_storages, SNF_t, NC_t)
         save_cisf(n_hc, n_cisf, interim_storages, versions, B)
         save_hc(n_hc, n_cisf, hot_cells, HC)
     else
