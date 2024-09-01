@@ -116,6 +116,12 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
         sum(NC_t[hc, n] for hc in hot_cells, n in nodes) == INITIAL_VOLUME
     )
 
+    @constraint(
+        model,
+        ensure_nc_quantity,
+        sum(NC_t[n, m] for n in nodes, m in nodes) == INITIAL_VOLUME
+    )
+
     # other nodes   ###################################################################################
     # ISF mass balance
     # @constraint(
@@ -125,11 +131,11 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
     # )
 
     # # no cask conversion except in hot cells
-    @constraint(
-        model, 
-        no_hc_from_isf[i = interim_storages], 
-        sum(NC_t[m, i] for m in nodes) == (1-B[i]) * sum(NC_t[i, m] for m in nodes)
-    )
+    # @constraint(
+    #     model, 
+    #     no_hc_from_isf[i = interim_storages], 
+    #     sum(NC_t[m, i] for m in nodes) == (1-B[i]) * sum(NC_t[i, m] for m in nodes)
+    # )
 
     # # overall mass balance
     # @constraint(
