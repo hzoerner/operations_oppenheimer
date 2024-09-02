@@ -18,13 +18,13 @@ pwd()
 path = ""
 
 if isempty(ARGS)
-    path = "C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/data/ExtendedNuclearData.xlsx" #individual absolute filepath
+    path = "/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/data/ExtendedNuclearData.xlsx" #individual absolute filepath
 else
     path = ARGS[1]
 end
 
 # Load parameter config
-parameter_grid = YAML.load_file("C:/Users/ACER/Desktop/Uni/9_WiSe_23_24/OR-INF/operations_oppenheimer/operations_oppenheimer/src/parameter_config.yaml")
+parameter_grid = YAML.load_file("/Users/simonirmer/Documents/Privat/Uni/Berlin/WS23-24/OR-INF/term_paper/operations_oppenheimer/src/parameter_config.yaml")
 
 # initialize transport information
 TRANSPORT_POSSIBLE, transport_costs = get_transport_details(path)
@@ -51,14 +51,14 @@ INITIAL_VOLUME = sum(values(snf))
 # hot cells
 max_hc_counts = parameter_grid["hot_cells"]["max_count"]
 hc_construction_costs = parameter_grid["hot_cells"]["construction_cost"]
-HC_BUILDING_COSTS = hc_construction_costs[2]
+HC_BUILDING_COSTS = hc_construction_costs[1]
 # cisf
 cisf_counts = parameter_grid["cisf"]["count"]
 
 
 for n_hc in max_hc_counts, n_cisf in cisf_counts
 
-    print("Run model with max " + n_hc + " hot cells and max " + n_cisf + " cisf.")
+    # print("Run model with max " + n_hc + " hot cells and max " + n_cisf + " cisf.")
     #create model and attach solver
     model = Model()
     set_optimizer(model, HiGHS.Optimizer)
@@ -78,9 +78,9 @@ for n_hc in max_hc_counts, n_cisf in cisf_counts
         # hot cell repacking costs
         cost_factor * HOT_CELL_COSTS * sum(SNF_t[r, hc] for r in reactors, hc in hot_cells) + 
         # CISF construction costs
-        sum(v.costs * B[d, v.size] for v in versions, d in interim_storages) +
+        cost_factor * sum(v.costs * B[d, v.size] for v in versions, d in interim_storages) +
         # hot cell construction costs
-        HC_BUILDING_COSTS * sum(HC[hc] for hc in hot_cells)
+        cost_factor * HC_BUILDING_COSTS * sum(HC[hc] for hc in hot_cells)
     )
 
     ### Hot Cell constraints

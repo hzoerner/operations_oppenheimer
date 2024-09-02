@@ -1,7 +1,7 @@
 hot_cells:
   max_count: [1,2,3,4,5,6, null]
-  construction_cost: [1000000, 20000000, 3000000]
-  processing_cost: 2000000
+  construction_cost: [90000000]
+  processing_cost: 3000000
 transport_costs:
   cost_factor: 75
   nuclear_factor: 100
